@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, session, redirect, url_for
-from models import db, User
-from forms import SignupForm, LoginForm
+from models import db, User, Place
+from forms import SignupForm, LoginForm, AddressForm
 
 app = Flask(__name__)
 
@@ -19,6 +19,10 @@ def about():
 
 @app.route("/signup", methods=['GET', 'POST'])
 def signup():
+
+  if 'email' in session:
+    return redirect(url_for('home'))
+
   form = SignupForm()
 
   if request.method == "POST":
@@ -37,6 +41,10 @@ def signup():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+
+  if 'email' in session:
+    return redirect(url_for('home'))
+
   form = LoginForm()
 
   if request.method == "POST":
@@ -63,7 +71,38 @@ def logout():
 
 @app.route("/home", methods=["GET", "POST"])
 def home():
-  return render_template("home.html")
+  if 'email' not in session:
+    return redirect(url_for('login'))
+
+  form = AddressForm()
+
+  places = []
+  my_coordinates = (37.4221, -122.0844)
+
+  if request.method == 'POST':
+    if form.validate() == False:
+      return render_template('home.html', form=form)
+    else:
+      # get the address
+      address = form.address.data
+
+      # query for places around it
+      p = Place()
+      my_coordinates = p.address_to_latlng(address)
+      places = p.query(address)
+
+      # return those results
+      return render_template('home.html', form=form, my_coordinates=my_coordinates, places=places)
+
+  elif request.method == 'GET':
+    return render_template("home.html", form=form, my_coordinates=my_coordinates, places=places)
+
+
+@app.route('/geoapi')
+def geoapi():
+  r = requests.get(
+      'https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gsradius=10000&gscoord=37.786971%7C-122.399677&gslimit=20&format=json')
+  return render_template('geoapi.html', movies=json.loads(r.text)['query']['geosearch'])
 
 if __name__ == "__main__":
     app.run(debug=True)
